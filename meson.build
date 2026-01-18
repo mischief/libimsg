@@ -22,7 +22,7 @@ else
   if is_static
     libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'], dependencies: [libbsd_overlay_dep], install: instlib)
   else
-    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'], dependencies: [libbsd_overlay_dep], install: instlib)
+    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'], dependencies: [libbsd_overlay_dep], install: instlib, version: '1.0.0')
   endif
   libimsg_dep = []
   libimsg_link = [libimsg]
