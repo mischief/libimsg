@@ -251,7 +251,9 @@ Get an imsg from imsgbuf.
 
 If no messages are ready, returns nil.
 @function get
-@treturn ?imsg returned @{imsg}
+@treturn[1] imsg returned @{imsg}
+@treturn[2] nil if there's no messages left
+@raise errno
 */
 static int
 lua_imsgbuf_get(lua_State *L)
@@ -261,14 +263,16 @@ lua_imsgbuf_get(lua_State *L)
 	ssize_t rv;
 
 	msg = lua_newuserdata(L, sizeof(*msg));
-	luaL_setmetatable(L, IMSG_MT);
 
 	switch((rv = imsg_get(im, msg))){
 	case 0:
 		lua_pushnil(L);
+		return 1;
 	case -1:
 		luaL_error(L, "imsg_get: %s", strerror(errno));
 	}
+
+	luaL_setmetatable(L, IMSG_MT);
 
 	return 1;
 }
