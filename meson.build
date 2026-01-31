@@ -11,6 +11,30 @@ if build_machine.system() == 'openbsd'
   libimsg_dep = [cc.find_library('util', static: is_static)]
   libimsg_link = []
   imsg_incdir = []
+elif build_machine.system() == 'freebsd'
+  lua_only = true
+  add_project_arguments('-Dfreezero(p,s)=free(p)', language: 'c')
+  instlib = true
+  if lua_only
+    instlib = false
+  endif
+
+  if is_static
+    libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'], install: instlib)
+  else
+    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'], install: instlib, version: '1.0.0')
+  endif
+  libimsg_dep = []
+  libimsg_link = [libimsg]
+
+  if not lua_only
+    install_headers('imsg.h')
+    install_man('ibuf_add.3', 'imsg_init.3')
+
+    pkgconfig.generate(libimsg)
+  endif
+
+  imsg_incdir = include_directories('.')
 else
   libbsd_overlay_dep = dependency('libbsd-overlay')
 

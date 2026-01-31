@@ -12,8 +12,14 @@ if cmod_override != ''
 endif
 
 dep_name = which_lua
+bin_name = which_lua
 if build_machine.system() == 'openbsd'
   dep_name = dep_name.replace('.', '')
+endif
+
+if build_machine.system() == 'freebsd'
+  bin_name = dep_name.replace('.', '')
+  dep_name = dep_name.replace('lua', 'lua-')
 endif
 
 lua_dep = dependency(dep_name)
@@ -28,7 +34,7 @@ lua_libimsg = shared_library('imsg',
   install_dir: install_cmod,
 )
 
-lua_bin = find_program(dep_name)
+lua_bin = find_program(bin_name)
 test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'), workdir: meson.current_build_dir())
 
 ldoc_bin = find_program('ldoc', required: false)
