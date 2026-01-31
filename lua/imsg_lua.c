@@ -236,14 +236,19 @@ lua_imsgbuf_read(lua_State *L)
 {
 	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
 
+	errno = 0;
+
 	switch(imsgbuf_read(im)){
 	case 0:
-		luaL_error(L, "imsgbuf_read: closed");
+		lua_pushnil(L);
+		return 1;
 	case -1:
 		luaL_error(L, "imsgbuf_read: %s", strerror(errno));
 	}
 
-	return 0;
+	lua_pushboolean(L, 1);
+
+	return 1;
 }
 
 /***
