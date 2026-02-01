@@ -1,9 +1,9 @@
 if which_lua == 'luajit'
   install_cmod = get_option('prefix') / 'lib/lua/5.1'
-elif which_lua == 'lua5.4'
-  install_cmod = get_option('prefix') / 'lib/lua/5.4'
+  install_mod = get_option('prefix') / 'share/lua/5.1'
 else
-  error('unhandled lua version')
+  install_cmod = get_option('prefix') / 'lib/lua/' + which_lua.replace('lua', '')
+  install_mod = get_option('prefix') / 'share/lua/' + which_lua.replace('lua', '')
 endif
 
 cmod_override = get_option('lua-module-directory')
@@ -15,6 +15,7 @@ dep_name = which_lua
 bin_name = which_lua
 if build_machine.system() == 'openbsd'
   dep_name = dep_name.replace('.', '')
+  bin_name = dep_name
 endif
 
 if build_machine.system() == 'freebsd'
