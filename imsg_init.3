@@ -102,7 +102,7 @@
 .Ft int
 .Fn imsgbuf_flush "struct imsgbuf *imsgbuf"
 .Ft int
-.Fn imsgbuf_get "struct imsgbuf *imsgbuf" "struct imsg *imsg"
+.Fn imsg_get "struct imsgbuf *imsgbuf" "struct imsg *imsg"
 .Ft int
 .Fn imsgbuf_init "struct imsgbuf *imsgbuf" "int fd"
 .Ft uint32_t
@@ -196,7 +196,7 @@ is set to indicate the error.
 should not be called on non-blocking sockets since it will busy loop if the
 socket is not available.
 .Pp
-.Fn imsgbuf_get
+.Fn imsg_get
 fills in an individual imsg pending on
 .Fa imsgbuf
 into the structure pointed to by
