@@ -7,68 +7,55 @@ cc = meson.get_compiler('c')
 pkgconfig = import('pkgconfig')
 
 lua_only = get_option('lua-only')
-
 is_static = get_option('lua-static')
 
 if build_machine.system() == 'openbsd'
+  # Use system libutil (contains imsg)
   libimsg_dep = [cc.find_library('util', static: is_static)]
   libimsg_link = []
   imsg_incdir = []
-elif build_machine.system() == 'freebsd'
-  lua_only = true
-  add_project_arguments('-Dfreezero(p,s)=free(p)', language: 'c')
-  instlib = true
-  if lua_only
-    instlib = false
-  endif
-
-  if is_static
-    libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'], install: instlib)
-  else
-    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'], install: instlib, version: '1.0.0')
-  endif
-  libimsg_dep = []
-  libimsg_link = [libimsg]
-
-  if not lua_only
-    install_headers('imsg.h')
-    install_man('ibuf_add.3', 'imsg_init.3')
-
-    pkgconfig.generate(libimsg)
-  endif
-
-  imsg_incdir = include_directories('.')
 else
-  libbsd_overlay_dep = dependency('libbsd-overlay')
+  # Build imsg from source
+  imsg_deps = []
 
-  instlib = true
-  if lua_only
-    instlib = false
+  if build_machine.system() in ['freebsd', 'linux']
+    # FreeBSD/musl/glibc provide explicit_bzero and strlcpy natively
+    add_project_arguments('-Dfreezero(p,s)=(explicit_bzero(p,s),free(p))', language: 'c')
+    if build_machine.system() == 'freebsd'
+      lua_only = true
+    endif
+  else
+    # Fallback: use libbsd
+    imsg_deps += dependency('libbsd-overlay')
   endif
+
+  instlib = not lua_only
 
   if is_static
-    libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'], dependencies: [libbsd_overlay_dep], install: instlib)
+    libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'],
+      dependencies: imsg_deps, install: instlib)
   else
-    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'], dependencies: [libbsd_overlay_dep], install: instlib, version: '1.0.0')
+    libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'],
+      dependencies: imsg_deps, install: instlib, version: '1.0.0')
   endif
+
   libimsg_dep = []
   libimsg_link = [libimsg]
 
-  if not lua_only
+  if instlib
     install_headers('imsg.h')
     install_man('ibuf_add.3', 'imsg_init.3')
-
     pkgconfig.generate(libimsg)
   endif
 
   imsg_incdir = include_directories('.')
 endif
 
-ibuf_test = executable('ibuf_test', 'ibuf_test.c', link_with: libimsg_link, dependencies: libimsg_dep)
+ibuf_test = executable('ibuf_test', 'ibuf_test.c',
+  link_with: libimsg_link, dependencies: libimsg_dep)
 test('ibuf_test', ibuf_test)
 
 which_lua = get_option('lua')
 if which_lua != 'false'
   subdir('lua')
 endif
-
