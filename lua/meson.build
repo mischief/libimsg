@@ -35,8 +35,12 @@ lua_libimsg = shared_library('imsg',
   install_dir: install_cmod,
 )
 
-lua_bin = find_program(bin_name)
-test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'), workdir: meson.current_build_dir())
+lua_bin = find_program(bin_name, required: false)
+if lua_bin.found()
+  test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'), workdir: meson.current_build_dir())
+else
+  warning('Lua interpreter "' + bin_name + '" not found, skipping tests')
+endif
 
 ldoc_bin = find_program('ldoc', required: false)
 if ldoc_bin.found()
