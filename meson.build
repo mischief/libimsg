@@ -12,6 +12,8 @@ is_static = get_option('lua-static')
 if build_machine.system() == 'openbsd'
   # Use system libutil (contains imsg)
   libimsg_dep = [cc.find_library('util', static: is_static)]
+  imsg_dep = declare_dependency(dependencies: libimsg_dep)
+  meson.override_dependency('imsg', imsg_dep)
   libimsg_link = []
   imsg_incdir = []
 else
@@ -49,6 +51,13 @@ else
   endif
 
   imsg_incdir = include_directories('.')
+
+  imsg_dep = declare_dependency(
+    link_with: libimsg,
+    include_directories: imsg_incdir,
+    dependencies: imsg_deps,
+  )
+  meson.override_dependency('imsg', imsg_dep)
 endif
 
 ibuf_test = executable('ibuf_test', 'ibuf_test.c',
