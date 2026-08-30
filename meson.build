@@ -1,4 +1,4 @@
-project('imsg', 'c', meson_version: '>=1.6.0', default_options: ['c_std=c11'])
+project('imsg', 'c', version: '0.1', meson_version: '>=1.6.0', default_options: ['c_std=c11'])
 
 # for IOV_MAX
 add_project_arguments('-D_GNU_SOURCE', language: 'c')

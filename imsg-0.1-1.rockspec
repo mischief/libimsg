@@ -1,7 +1,8 @@
 package = "imsg"
-version = "scm-0"
+version = "0.1-1"
 source = {
-   url = "git+https://github.com/mischief/libimsg.git"
+   url = "git+https://github.com/mischief/libimsg.git",
+   tag = "v0.1"
 }
 description = {
    summary = "Lua binding to OpenBSD imsg",
