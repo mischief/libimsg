@@ -122,14 +122,17 @@ lua_imsg_type(lua_State *L)
 
 /***
 Forward this imsg to another imsgbuf.
-@function type
-@tparam imsgbuf imsgbuf to forward this imsg to
+
+The imsg is queued for sending on the target imsgbuf.
+@function forward
+@tparam imsgbuf imsgbuf imsgbuf to forward this imsg to
+@raise errno
 */
 static int
 lua_imsg_forward(lua_State *L)
 {
 	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = luaL_checkudata(L, 2, IMSGBUF_MT);
 
 	if(imsg_forward(im, msg) < 0)
 		luaL_error(L, "imsg_forward: %s", strerror(errno));
@@ -303,6 +306,8 @@ Set the maximum message size for this imsgbuf.
 
 Must be at least IMSG_HEADER_SIZE.
 @function set_maxsize
+@int maxsize maximum message size, including the header
+@raise errno
 */
 static int
 lua_imsgbuf_set_maxsize(lua_State *L)

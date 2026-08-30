@@ -53,9 +53,18 @@ On OpenBSD, the system manuals can be viewed locally with `man imsg_init`.
 [LDoc](https://github.com/lunarmodules/ldoc) can build documentation for the Lua module.
 
     sudo apt-get install lua-ldoc # or doas pkg_add lualdoc
-    ninja -C build lua/index.html
+    meson configure -Ddocs=enabled build
+    ninja -C build docs
 
-The output is in `build/lua/index.html`
+The output is in `build/lua/index.html`, and is installed to
+`$prefix/share/doc/imsg` when `-Ddocs=enabled` is set.
 
 A plaintext version can be viewed with `ldoc --dump lua/imsg_lua.c`.
+
+## Tests
+
+The Lua binding tests need luaposix.
+
+    sudo apt-get install lua-posix # or doas pkg_add luaposix
+    meson test -C build
 

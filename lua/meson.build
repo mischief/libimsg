@@ -42,12 +42,17 @@ else
   warning('Lua interpreter "' + bin_name + '" not found, skipping tests')
 endif
 
-ldoc_bin = find_program('ldoc', required: false)
+ldoc_bin = find_program('ldoc', required: get_option('docs'))
 if ldoc_bin.found()
   documentation = custom_target('ldoc',
     input: [files('imsg_lua.c')],
     output: ['index.html', 'ldoc.css'],
-    command: [ldoc_bin, '-d', '@OUTDIR@', '@INPUT@'],
+    command: [ldoc_bin, '-c', files('config.ld'), '-d', '@OUTDIR@', '@INPUT@'],
+    depend_files: files('config.ld'),
+    build_by_default: get_option('docs').enabled(),
+    install: get_option('docs').enabled(),
+    install_dir: get_option('datadir') / 'doc/imsg',
   )
+  alias_target('docs', documentation)
 endif
 

@@ -3,3 +3,4 @@ option('lua-module-directory', type : 'string', value : '', description : 'overr
 option('lua-only', type : 'boolean', value : false)
 option('lua-static', type : 'boolean', value : false)
 
+option('docs', type: 'feature', value: 'auto', description: 'build API documentation with ldoc')

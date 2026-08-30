@@ -44,3 +44,36 @@ msg = buf1:get()
 assert(msg:len() == #payload)
 assert(msg:data() == payload)
 
+
+-- fd passing
+local fd = posix_unistd.dup(0)
+buf1:allow_fdpass()
+buf0:compose(typ, id, 0, fd, "fd")
+buf0:flush()
+
+buf1:read()
+msg = buf1:get()
+local gotfd = msg:fd()
+assert(gotfd ~= -1)
+assert(msg:data() == "fd")
+posix_unistd.close(gotfd)
+
+-- forwarding
+local p2, p3 = socketpair(posix_socket.AF_UNIX, posix_socket.SOCK_STREAM, 0)
+local buf2, buf3 = imsg.new(p2), imsg.new(p3)
+
+buf0:compose(typ, id, 0, -1, "forward me")
+buf0:flush()
+buf1:read()
+msg = buf1:get()
+msg:forward(buf2)
+buf2:flush()
+
+buf3:read()
+local fwd = buf3:get()
+assert(fwd:type() == typ)
+assert(fwd:id() == id)
+assert(fwd:data() == "forward me")
+
+-- no more messages queued
+assert(buf3:get() == nil)

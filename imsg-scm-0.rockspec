@@ -1,3 +1,4 @@
+rockspec_format = "3.0"
 package = "imsg"
 version = "scm-0"
 source = {
@@ -11,6 +12,10 @@ description = {
 }
 dependencies = {
    "lua >= 5.1, < 5.6",
+}
+
+test_dependencies = {
+   "luaposix",
 }
 
 build = {
