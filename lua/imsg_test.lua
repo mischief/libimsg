@@ -93,9 +93,14 @@ assert(buf0:queuelen() == 2)
 buf0:flush()
 assert(buf0:queuelen() == 0)
 
+-- readlen tracks messages received but not yet handed out
+assert(buf1:readlen() == 0)
 buf1:read()
+assert(buf1:readlen() == 2)
 assert(buf1:get():data() == "queued")
+assert(buf1:readlen() == 1)
 assert(buf1:get():data() == "queued too")
+assert(buf1:readlen() == 0)
 
 -- an unclaimed fd is closed with the imsg
 local probe = posix_unistd.dup(0)

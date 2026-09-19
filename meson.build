@@ -38,7 +38,7 @@ else
       dependencies: imsg_deps, install: instlib)
   else
     libimsg = shared_library('imsg', ['imsg.c', 'imsg-buffer.c'],
-      dependencies: imsg_deps, install: instlib, version: '1.0.0')
+      dependencies: imsg_deps, install: instlib, version: '2.0.0')
   endif
 
   libimsg_dep = []

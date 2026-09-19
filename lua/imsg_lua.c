@@ -318,12 +318,12 @@ lua_imsgbuf_get(lua_State *L)
 	lmsg->fd = -1;
 	lmsg->claimed = 0;
 
-	switch(imsg_get(im, &lmsg->msg)){
+	switch(imsgbuf_get(im, &lmsg->msg)){
 	case 0:
 		lua_pushnil(L);
 		return 1;
 	case -1:
-		luaL_error(L, "imsg_get: %s", strerror(errno));
+		luaL_error(L, "imsgbuf_get: %s", strerror(errno));
 	}
 
 	luaL_setmetatable(L, IMSG_MT);
@@ -383,6 +383,24 @@ lua_imsgbuf_queuelen(lua_State *L)
 	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 
 	lua_pushinteger(L, imsgbuf_queuelen(im));
+
+	return 1;
+}
+
+/***
+Number of received messages waiting to be read.
+
+A read queues every complete message the socket had. An event loop uses this
+to drain them with @{get} before it waits on the socket again.
+@function readlen
+@treturn int number of queued messages
+*/
+static int
+lua_imsgbuf_readlen(lua_State *L)
+{
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
+
+	lua_pushinteger(L, msgbuf_readlen(im->w));
 
 	return 1;
 }
@@ -471,6 +489,7 @@ static const luaL_Reg imsgbuf_meta[] = {
 	{"allow_fdpass",lua_imsgbuf_allow_fdpass},
 	{"set_maxsize", lua_imsgbuf_set_maxsize},
 	{"queuelen",	lua_imsgbuf_queuelen},
+	{"readlen",	lua_imsgbuf_readlen},
 	{"fileno",	lua_imsgbuf_fileno},
 	{"close",	lua_imsgbuf_close},
 	{"__gc",	lua_imsgbuf_gc},
