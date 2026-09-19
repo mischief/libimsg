@@ -55,6 +55,8 @@ buf1:read()
 msg = buf1:get()
 local gotfd = msg:fd()
 assert(gotfd ~= -1)
+-- fd() is idempotent
+assert(msg:fd() == gotfd)
 assert(msg:data() == "fd")
 posix_unistd.close(gotfd)
 
@@ -77,3 +79,49 @@ assert(fwd:data() == "forward me")
 
 -- no more messages queued
 assert(buf3:get() == nil)
+
+-- fileno reports the socket
+assert(buf0:fileno() == p0)
+assert(buf1:fileno() == p1)
+
+-- queuelen tracks messages waiting to be written
+assert(buf0:queuelen() == 0)
+buf0:compose(typ, id, 0, -1, "queued")
+assert(buf0:queuelen() == 1)
+buf0:compose(typ, id, 0, -1, "queued too")
+assert(buf0:queuelen() == 2)
+buf0:flush()
+assert(buf0:queuelen() == 0)
+
+buf1:read()
+assert(buf1:get():data() == "queued")
+assert(buf1:get():data() == "queued too")
+
+-- an unclaimed fd is closed with the imsg
+local probe = posix_unistd.dup(0)
+posix_unistd.close(probe)
+buf0:compose(typ, id, 0, posix_unistd.dup(0), "drop")
+buf0:flush()
+buf1:read()
+msg = buf1:get()
+msg = nil
+collectgarbage()
+collectgarbage()
+-- the dropped fd is free again, so dup hands back the same number
+local again = posix_unistd.dup(0)
+assert(again == probe)
+posix_unistd.close(again)
+
+-- close releases the imsgbuf but leaves the socket open
+buf3:close()
+assert(buf3:fileno() == -1)
+-- closing twice is fine
+buf3:close()
+assert(not pcall(function() return buf3:queuelen() end))
+-- the socket is still ours to close
+assert(posix_unistd.close(p3))
+
+-- close(true) closes the socket too
+buf2:close(true)
+assert(buf2:fileno() == -1)
+assert(not posix_unistd.close(p2))

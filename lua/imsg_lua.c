@@ -8,6 +8,7 @@
 #include <sys/queue.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 #include <imsg.h>
 
 #include <lua.h>
@@ -15,6 +16,39 @@
 
 #define IMSGBUF_MT "imsgbuf_mt"
 #define IMSG_MT "imsg_mt"
+
+/*
+ * An imsgbuf owns no file descriptor: imsgbuf_clear() does not close one.
+ * The fd is kept here so fileno() can report it and close() can optionally
+ * close it.
+ */
+struct limsgbuf {
+	struct imsgbuf	 buf;
+	int		 fd;
+	int		 closed;
+};
+
+/*
+ * imsg_get_fd() hands the descriptor to the caller and forgets it, so it can
+ * only answer once. The fd is claimed here when the imsg is created, and
+ * closed on collection unless Lua took it with fd().
+ */
+struct limsg {
+	struct imsg	 msg;
+	int		 fd;
+	int		 claimed;
+};
+
+static struct limsgbuf *
+checkimsgbuf(lua_State *L, int idx)
+{
+	struct limsgbuf *lim = luaL_checkudata(L, idx, IMSGBUF_MT);
+
+	if(lim->closed)
+		luaL_error(L, "imsgbuf is closed");
+
+	return lim;
+}
 
 /***
 imsg
@@ -29,7 +63,7 @@ Retrive data from an imsg
 static int
 lua_imsg_data(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
 	struct ibuf ibuf;
 	size_t left;
 	char *p;
@@ -56,15 +90,21 @@ lua_imsg_data(lua_State *L)
 /***
 Retrive fd from an imsg.
 
--1 is returned if there is no fd.
+-1 is returned if there is no fd. The same descriptor is returned by every
+call. The caller owns the descriptor after the first call and must close it;
+a descriptor never asked for is closed with the imsg.
 @function fd
 @treturn int file descriptor
 */
 static int
 lua_imsg_fd(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
-	lua_pushinteger(L, imsg_get_fd(msg));
+	struct limsg *lmsg = luaL_checkudata(L, 1, IMSG_MT);
+
+	if(lmsg->fd >= 0)
+		lmsg->claimed = 1;
+
+	lua_pushinteger(L, lmsg->fd);
 	return 1;
 }
 
@@ -76,7 +116,7 @@ Retrive id from an imsg.
 static int
 lua_imsg_id(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
 	lua_pushinteger(L, imsg_get_id(msg));
 	return 1;
 }
@@ -89,7 +129,7 @@ Retrive length of data.
 static int
 lua_imsg_len(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
 	lua_pushinteger(L, imsg_get_len(msg));
 	return 1;
 }
@@ -102,7 +142,7 @@ Retrive PID of the sender of the imsg.
 static int
 lua_imsg_pid(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
 	lua_pushinteger(L, imsg_get_pid(msg));
 	return 1;
 }
@@ -115,7 +155,7 @@ Retrive type of the imsg.
 static int
 lua_imsg_type(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
 	lua_pushinteger(L, imsg_get_type(msg));
 	return 1;
 }
@@ -131,8 +171,8 @@ The imsg is queued for sending on the target imsgbuf.
 static int
 lua_imsg_forward(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
-	struct imsgbuf *im = luaL_checkudata(L, 2, IMSGBUF_MT);
+	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
+	struct imsgbuf *im = &checkimsgbuf(L, 2)->buf;
 
 	if(imsg_forward(im, msg) < 0)
 		luaL_error(L, "imsg_forward: %s", strerror(errno));
@@ -143,9 +183,14 @@ lua_imsg_forward(lua_State *L)
 static int
 lua_imsg_gc(lua_State *L)
 {
-	struct imsg *msg = luaL_checkudata(L, 1, IMSG_MT);
+	struct limsg *lmsg = luaL_checkudata(L, 1, IMSG_MT);
 
-	imsg_free(msg);
+	imsg_free(&lmsg->msg);
+
+	if(lmsg->fd >= 0 && !lmsg->claimed)
+		close(lmsg->fd);
+	lmsg->fd = -1;
+
 	return 0;
 }
 
@@ -180,7 +225,7 @@ The imsg is queued for sending after creation.
 static int
 lua_imsgbuf_compose(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 	int typ = luaL_checkinteger(L, 2);
 	int id = luaL_checkinteger(L, 3);
 	int pid = luaL_checkinteger(L, 4);
@@ -201,7 +246,7 @@ Write out queued messages.
 static int
 lua_imsgbuf_write(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 
 	if(imsgbuf_write(im) < 0)
 		luaL_error(L, "imsgbuf_write: %s", strerror(errno));
@@ -220,7 +265,7 @@ Should not be called on non-blocking sockets.
 static int
 lua_imsgbuf_flush(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 
 	if(imsgbuf_flush(im) < 0)
 		luaL_error(L, "imsgbuf_flush: %s", strerror(errno));
@@ -237,7 +282,7 @@ Individual imsgs can be retrieved with @{get}.
 static int
 lua_imsgbuf_read(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 
 	errno = 0;
 
@@ -266,13 +311,14 @@ If no messages are ready, returns nil.
 static int
 lua_imsgbuf_get(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
-	struct imsg *msg;
-	ssize_t rv;
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
+	struct limsg *lmsg;
 
-	msg = lua_newuserdata(L, sizeof(*msg));
+	lmsg = lua_newuserdata(L, sizeof(*lmsg));
+	lmsg->fd = -1;
+	lmsg->claimed = 0;
 
-	switch((rv = imsg_get(im, msg))){
+	switch(imsg_get(im, &lmsg->msg)){
 	case 0:
 		lua_pushnil(L);
 		return 1;
@@ -281,6 +327,7 @@ lua_imsgbuf_get(lua_State *L)
 	}
 
 	luaL_setmetatable(L, IMSG_MT);
+	lmsg->fd = imsg_get_fd(&lmsg->msg);
 
 	return 1;
 }
@@ -294,7 +341,7 @@ Allows file descriptor passing in both directions for this imsgbuf.
 static int
 lua_imsgbuf_allow_fdpass(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 
 	imsgbuf_allow_fdpass(im);
 
@@ -312,7 +359,7 @@ Must be at least IMSG_HEADER_SIZE.
 static int
 lua_imsgbuf_set_maxsize(lua_State *L)
 {
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
 	int maxsize = luaL_checkinteger(L, 2);
 	if(maxsize < IMSG_HEADER_SIZE)
 		luaL_error(L, "expected positive integer greater than IMSG_HEADER_SIZE (%d)", IMSG_HEADER_SIZE);
@@ -322,15 +369,98 @@ lua_imsgbuf_set_maxsize(lua_State *L)
 	return 0;
 }
 
-static int
-lua_imsgbuf_gc(lua_State *L)
-{
-	struct imsgbuf *im = luaL_checkudata(L, 1, IMSGBUF_MT);
+/***
+Number of messages waiting to be written.
 
-	imsgbuf_clear(im);
+A write leaves messages queued when the socket is full. An event loop uses
+this to decide whether it must wait for the socket to become writable again.
+@function queuelen
+@treturn int number of queued messages
+*/
+static int
+lua_imsgbuf_queuelen(lua_State *L)
+{
+	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
+
+	lua_pushinteger(L, imsgbuf_queuelen(im));
+
+	return 1;
+}
+
+/***
+File descriptor of this imsgbuf.
+
+-1 is returned once the imsgbuf is closed.
+@function fileno
+@treturn int file descriptor
+*/
+static int
+lua_imsgbuf_fileno(lua_State *L)
+{
+	struct limsgbuf *lim = luaL_checkudata(L, 1, IMSGBUF_MT);
+
+	lua_pushinteger(L, lim->closed ? -1 : lim->fd);
+
+	return 1;
+}
+
+static void
+imsgbuf_close(struct limsgbuf *lim, int closefd)
+{
+	if(lim->closed)
+		return;
+
+	imsgbuf_clear(&lim->buf);
+	lim->closed = 1;
+
+	if(closefd && lim->fd >= 0)
+		close(lim->fd);
+	lim->fd = -1;
+}
+
+/***
+Release this imsgbuf.
+
+Queued messages are discarded. Further calls on the imsgbuf raise an error.
+Closing twice is not an error.
+
+The imsgbuf does not own its file descriptor, so the descriptor is left open
+unless closefd is true.
+@function close
+@bool[opt=false] closefd also close the file descriptor
+*/
+static int
+lua_imsgbuf_close(lua_State *L)
+{
+	struct limsgbuf *lim = luaL_checkudata(L, 1, IMSGBUF_MT);
+
+	imsgbuf_close(lim, lua_toboolean(L, 2));
 
 	return 0;
 }
+
+static int
+lua_imsgbuf_gc(lua_State *L)
+{
+	struct limsgbuf *lim = luaL_checkudata(L, 1, IMSGBUF_MT);
+
+	imsgbuf_close(lim, 0);
+
+	return 0;
+}
+
+#if LUA_VERSION_NUM >= 504
+/* __close gets the error object as its second argument, never a flag. */
+static int
+lua_imsgbuf_closemeta(lua_State *L)
+{
+	struct limsgbuf *lim = luaL_checkudata(L, 1, IMSGBUF_MT);
+
+	imsgbuf_close(lim, 0);
+
+	return 0;
+}
+#endif
 
 static const luaL_Reg imsgbuf_meta[] = {
 	{"compose",	lua_imsgbuf_compose},
@@ -340,7 +470,13 @@ static const luaL_Reg imsgbuf_meta[] = {
 	{"get",		lua_imsgbuf_get},
 	{"allow_fdpass",lua_imsgbuf_allow_fdpass},
 	{"set_maxsize", lua_imsgbuf_set_maxsize},
+	{"queuelen",	lua_imsgbuf_queuelen},
+	{"fileno",	lua_imsgbuf_fileno},
+	{"close",	lua_imsgbuf_close},
 	{"__gc",	lua_imsgbuf_gc},
+#if LUA_VERSION_NUM >= 504
+	{"__close",	lua_imsgbuf_closemeta},
+#endif
 	{0, 0}
 };
 
@@ -358,14 +494,17 @@ Create a new imsgbuf
 static int
 lua_imsgbuf_new(lua_State *L)
 {
-	struct imsgbuf *im;
+	struct limsgbuf *lim;
 	int fd = luaL_checkinteger(L, 1);
 
-	im = lua_newuserdata(L, sizeof(*im));
+	lim = lua_newuserdata(L, sizeof(*lim));
+	lim->fd = fd;
+	lim->closed = 1;	/* nothing to clear until imsgbuf_init succeeds */
 	luaL_setmetatable(L, IMSGBUF_MT);
 
-	if(imsgbuf_init(im, fd) < 0)
+	if(imsgbuf_init(&lim->buf, fd) < 0)
 		luaL_error(L, "imsgbuf_init");
+	lim->closed = 0;
 
 	return 1;
 }
