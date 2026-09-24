@@ -25,7 +25,7 @@ build = {
    build_command = "CFLAGS='$(CFLAGS)' meson setup --reconfigure --wipe -Dlua=lua$(LUA_VERSION) -Dlua-only=true -Dlua-static=true -Dlua-module-directory=$(LIBDIR) build",
    install_command = "ninja -C build -v install",
 
-   -- link libutil dynamically on OpenBSD
+   -- on OpenBSD, link libutil dynamically when it has all of imsg
    platforms = {
       openbsd = {
          build_command = "CFLAGS='$(CFLAGS)' meson setup --reconfigure --wipe -Dlua=lua$(LUA_VERSION) -Dlua-only=true -Dlua-static=false -Dlua-module-directory=$(LIBDIR) build",

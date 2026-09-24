@@ -1,4 +1,4 @@
-project('imsg', 'c', version: '0.2', meson_version: '>=1.6.0', default_options: ['c_std=c11'])
+project('imsg', 'c', version: '0.3', meson_version: '>=1.6.0', default_options: ['c_std=c11'])
 
 # for IOV_MAX
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
@@ -43,7 +43,8 @@ else
 
   instlib = not lua_only
 
-  if is_static
+  # a library that is not installed must be static, or the module cannot load it
+  if is_static or not instlib
     libimsg = static_library('imsg', ['imsg.c', 'imsg-buffer.c'],
       dependencies: imsg_deps, install: instlib)
   else
