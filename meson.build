@@ -9,9 +9,17 @@ pkgconfig = import('pkgconfig')
 lua_only = get_option('lua-only')
 is_static = get_option('lua-static')
 
+# OpenBSD libutil has imsg, but older releases lack msgbuf_readlen.
+# Use libutil only when it has every function this build needs.
+use_libutil = false
 if build_machine.system() == 'openbsd'
-  # Use system libutil (contains imsg)
-  libimsg_dep = [cc.find_library('util', static: is_static)]
+  libutil = cc.find_library('util', static: is_static)
+  use_libutil = cc.has_function('msgbuf_readlen', dependencies: libutil,
+    prefix: '#include <sys/queue.h>\n#include <imsg.h>')
+endif
+
+if use_libutil
+  libimsg_dep = [libutil]
   imsg_dep = declare_dependency(dependencies: libimsg_dep)
   meson.override_dependency('imsg', imsg_dep)
   libimsg_link = []
@@ -20,7 +28,9 @@ else
   # Build imsg from source
   imsg_deps = []
 
-  if build_machine.system() in ['freebsd', 'linux']
+  if build_machine.system() == 'openbsd'
+    lua_only = true
+  elif build_machine.system() in ['freebsd', 'linux']
     # FreeBSD/musl/glibc provide explicit_bzero and strlcpy natively
     add_project_arguments('-Dfreezero(p,s)=(explicit_bzero(p,s),free(p))', language: 'c')
     if build_machine.system() == 'freebsd'
