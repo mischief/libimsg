@@ -5,8 +5,8 @@ This is a vendored copy and lua binding to OpenBSD's
 license.
 
 On OpenBSD, the build uses imsg from the system libutil when libutil has
-msgbuf_readlen. Otherwise, and on other systems, it builds the vendored copy. Linux and FreeBSD need no extra libraries. Other
-systems need libbsd.
+msgbuf_readlen. Otherwise, and on other systems, it builds the vendored
+copy. Linux and FreeBSD need no extra libraries. Other systems need libbsd.
 
 ## Installation
 
@@ -19,7 +19,8 @@ The Lua module is on luarocks.org. It supports Lua 5.3, 5.4 and 5.5.
     luarocks install imsg
 
 The rock runs meson and ninja, so install them first. The rock links the
-vendored imsg statically, or libutil on a current OpenBSD. It installs no C library.
+vendored imsg statically, or libutil on a current OpenBSD. It installs no C
+library.
 
 To build the rock from a checkout:
 
