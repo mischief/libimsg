@@ -1,4 +1,9 @@
-if which_lua == 'luajit'
+if which_lua == 'rock'
+  # luarocks gives the header and module directories; the interpreter
+  # resolves the Lua symbols when it loads the module.
+  install_cmod = get_option('prefix') / 'lib'
+  install_mod = get_option('prefix') / 'share'
+elif which_lua == 'luajit'
   install_cmod = get_option('prefix') / 'lib/lua/5.1'
   install_mod = get_option('prefix') / 'share/lua/5.1'
 else
@@ -23,7 +28,19 @@ if build_machine.system() == 'freebsd'
   dep_name = dep_name.replace('lua', 'lua-')
 endif
 
-lua_dep = dependency(dep_name)
+if which_lua == 'rock'
+  lua_incdir = get_option('lua-incdir')
+  if lua_incdir == ''
+    error('-Dlua=rock needs -Dlua-incdir')
+  endif
+  lua_link = []
+  if host_machine.system() == 'darwin'
+    lua_link = ['-undefined', 'dynamic_lookup']
+  endif
+  lua_dep = declare_dependency(compile_args: ['-I' + lua_incdir], link_args: lua_link)
+else
+  lua_dep = dependency(dep_name)
+endif
 
 lua_libimsg = shared_library('imsg',
   'imsg_lua.c',
@@ -33,9 +50,15 @@ lua_libimsg = shared_library('imsg',
   link_with: libimsg_link,
   install: true,
   install_dir: install_cmod,
+  # A rock build does not link liblua, so Lua symbols stay undefined.
+  override_options: which_lua == 'rock' ? ['b_lundef=false'] : [],
 )
 
-lua_bin = find_program(bin_name, required: false)
+# A rock build does not know the interpreter; luarocks test runs the tests.
+lua_bin = disabler()
+if which_lua != 'rock'
+  lua_bin = find_program(bin_name, required: false)
+endif
 if lua_bin.found()
   test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'), workdir: meson.current_build_dir())
 else
