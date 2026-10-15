@@ -80,6 +80,22 @@ assert(fwd:data() == "forward me")
 -- no more messages queued
 assert(buf3:get() == nil)
 
+-- type and id are 32-bit unsigned
+buf0:compose(0xffffffff, 0xffffffff, 0, -1, "max")
+buf0:flush()
+buf1:read()
+msg = buf1:get()
+assert(msg:type() == 0xffffffff)
+assert(msg:id() == 0xffffffff)
+assert(not pcall(buf0.compose, buf0, -1, id, 0, -1, "x"))
+assert(not pcall(buf0.compose, buf0, 0x100000000, id, 0, -1, "x"))
+assert(not pcall(buf0.compose, buf0, typ, id, 0, -2, "x"))
+-- buf2 does not pass fds, so an fd is refused and stays with the caller
+local keep = posix_unistd.dup(0)
+assert(not pcall(buf2.compose, buf2, typ, id, 0, keep, "x"))
+assert(posix_unistd.close(keep))
+assert(buf0:queuelen() == 0)
+
 -- fileno reports the socket
 assert(buf0:fileno() == p0)
 assert(buf1:fileno() == p1)

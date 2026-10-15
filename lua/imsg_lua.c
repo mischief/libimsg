@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: ISC
 
 #include <sys/queue.h>
+#include <limits.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -26,6 +28,7 @@ struct limsgbuf {
 	struct imsgbuf	 buf;
 	int		 fd;
 	int		 closed;
+	int		 fdpass;	/* imsgbuf keeps this flag private */
 };
 
 /*
@@ -48,6 +51,16 @@ checkimsgbuf(lua_State *L, int idx)
 		luaL_error(L, "imsgbuf is closed");
 
 	return lim;
+}
+
+static lua_Integer
+checkrange(lua_State *L, int idx, lua_Integer lo, lua_Integer hi)
+{
+	lua_Integer v = luaL_checkinteger(L, idx);
+
+	luaL_argcheck(L, v >= lo && v <= hi, idx, "out of range");
+
+	return v;
 }
 
 /***
@@ -215,25 +228,37 @@ imsgbuf
 Compose a new imsg.
 
 The imsg is queued for sending after creation.
+
+On success the imsgbuf owns fd and closes it after the message is sent.
+The caller must not use or close fd again. On error the caller still
+owns fd.
 @function compose
-@int type Type of this message
-@int id ID of this message
+@int type Type of this message, 0 to 2^32-1
+@int id ID of this message, 0 to 2^32-1
 @int pid 0 means use the current PID.
-@int fd -1 means send no file descriptor
-@string data data to send
+@int fd -1 means send no file descriptor. Needs @{allow_fdpass}.
+@string[opt] data data to send, nil or absent sends no data
+@raise errno
 */
 static int
 lua_imsgbuf_compose(lua_State *L)
 {
-	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
-	int typ = luaL_checkinteger(L, 2);
-	int id = luaL_checkinteger(L, 3);
-	int pid = luaL_checkinteger(L, 4);
-	int fd = luaL_checkinteger(L, 5);
-	size_t sz;
-	const char *buf = luaL_checklstring(L, 6, &sz);
+	struct limsgbuf *lim = checkimsgbuf(L, 1);
+	uint32_t typ = (uint32_t)checkrange(L, 2, 0, UINT32_MAX);
+	uint32_t id = (uint32_t)checkrange(L, 3, 0, UINT32_MAX);
+	pid_t pid = (pid_t)checkrange(L, 4, 0, INT_MAX);
+	int fd = (int)checkrange(L, 5, -1, INT_MAX);
+	size_t sz = 0;
+	const char *buf = luaL_optlstring(L, 6, NULL, &sz);
 
-	if(imsg_compose(im, typ, id, pid, fd, buf, sz) < 0)
+	/*
+	 * Without fd passing the fd is marked in the header but never sent,
+	 * and the peer drops the stream. Refuse it while the caller owns fd.
+	 */
+	if(fd >= 0 && !lim->fdpass)
+		luaL_error(L, "imsg_compose: fd passing not allowed");
+
+	if(imsg_compose(&lim->buf, typ, id, pid, fd, buf, sz) < 0)
 		luaL_error(L, "imsg_compose: %s", strerror(errno));
 
 	return 0;
@@ -341,9 +366,10 @@ Allows file descriptor passing in both directions for this imsgbuf.
 static int
 lua_imsgbuf_allow_fdpass(lua_State *L)
 {
-	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
+	struct limsgbuf *lim = checkimsgbuf(L, 1);
 
-	imsgbuf_allow_fdpass(im);
+	imsgbuf_allow_fdpass(&lim->buf);
+	lim->fdpass = 1;
 
 	return 0;
 }
@@ -518,6 +544,7 @@ lua_imsgbuf_new(lua_State *L)
 
 	lim = lua_newuserdata(L, sizeof(*lim));
 	lim->fd = fd;
+	lim->fdpass = 0;
 	lim->closed = 1;	/* nothing to clear until imsgbuf_init succeeds */
 	luaL_setmetatable(L, IMSGBUF_MT);
 
