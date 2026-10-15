@@ -60,7 +60,10 @@ if which_lua != 'rock'
   lua_bin = find_program(bin_name, required: false)
 endif
 if lua_bin.found()
-  test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'), workdir: meson.current_build_dir())
+  # The built module comes first, before any installed one.
+  test('imsg_lua_test', lua_bin, depends: lua_libimsg, args: files('imsg_test.lua'),
+    workdir: meson.current_build_dir(),
+    env: {'LUA_CPATH': meson.current_build_dir() / '?.so;;'})
 else
   warning('Lua interpreter "' + bin_name + '" not found, skipping tests')
 endif
