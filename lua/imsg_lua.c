@@ -70,6 +70,8 @@ imsg
 
 /***
 Retrive data from an imsg
+
+Every call returns the same data. A message with no data gives "".
 @function data
 @treturn string data from imsg
 */
@@ -77,26 +79,12 @@ static int
 lua_imsg_data(lua_State *L)
 {
 	struct imsg *msg = &((struct limsg *)luaL_checkudata(L, 1, IMSG_MT))->msg;
-	struct ibuf ibuf;
-	size_t left;
-	char *p;
-	luaL_Buffer b;
 
-	luaL_buffinit(L, &b);
-
-	if(imsg_get_ibuf(msg, &ibuf) < 0)
-		luaL_error(L, "imsg_get_ibuf");
-
-	while((left = ibuf_size(&ibuf)) > 0){
-		left = left > LUAL_BUFFERSIZE ? LUAL_BUFFERSIZE : left;
-		p = luaL_prepbuffer(&b);
-		if(ibuf_get(&ibuf, p, left) < 0)
-			luaL_error(L, "ibuf_get: %s", strerror(errno));
-
-		luaL_addsize(&b, left);
-	}
-
-	luaL_pushresult(&b);
+	/*
+	 * Read the ibuf in place. imsg_get_ibuf() consumes the data, so a
+	 * second data() or a later len() would see an empty message.
+	 */
+	lua_pushlstring(L, ibuf_data(msg->buf), ibuf_size(msg->buf));
 	return 1;
 }
 

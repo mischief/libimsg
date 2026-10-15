@@ -33,6 +33,9 @@ assert(msg:pid() == posix_unistd.getpid())
 assert(msg:type() == typ)
 assert(msg:id() == id)
 assert(msg:data() == payload)
+-- data() does not consume the message
+assert(msg:data() == payload)
+assert(msg:len() == #payload)
 
 -- big msg
 payload = string.rep('A', imsg.MAX_IMSGSIZE)
@@ -79,6 +82,15 @@ assert(fwd:data() == "forward me")
 
 -- no more messages queued
 assert(buf3:get() == nil)
+
+-- a message may carry no data
+buf0:compose(typ, id, 0, -1)
+buf0:flush()
+buf1:read()
+msg = buf1:get()
+assert(msg:len() == 0)
+assert(msg:data() == "")
+assert(msg:data() == "")
 
 -- type and id are 32-bit unsigned
 buf0:compose(0xffffffff, 0xffffffff, 0, -1, "max")
