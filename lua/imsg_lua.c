@@ -365,20 +365,19 @@ lua_imsgbuf_allow_fdpass(lua_State *L)
 /***
 Set the maximum message size for this imsgbuf.
 
-Must be at least IMSG_HEADER_SIZE.
+The limit applies to the data. The header is not counted.
 @function set_maxsize
-@int maxsize maximum message size, including the header
+@int maxsize maximum data size, excluding the header
 @raise errno
 */
 static int
 lua_imsgbuf_set_maxsize(lua_State *L)
 {
 	struct imsgbuf *im = &checkimsgbuf(L, 1)->buf;
-	int maxsize = luaL_checkinteger(L, 2);
-	if(maxsize < IMSG_HEADER_SIZE)
-		luaL_error(L, "expected positive integer greater than IMSG_HEADER_SIZE (%d)", IMSG_HEADER_SIZE);
+	uint32_t maxsize = (uint32_t)checkrange(L, 2, 0, UINT32_MAX);
 
-	imsgbuf_set_maxsize(im, (uint32_t) maxsize);
+	if(imsgbuf_set_maxsize(im, maxsize) < 0)
+		luaL_error(L, "imsgbuf_set_maxsize: %s", strerror(errno));
 
 	return 0;
 }
@@ -556,7 +555,7 @@ Constants
 /***
 @table constants
 @int IMSG_HEADER_SIZE Size of the imsg message header.
-@int MAX_IMSGSIZE Default maximum imsg size.
+@int MAX_IMSGSIZE Default maximum imsg size, including the header.
 */
 
 int

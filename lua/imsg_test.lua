@@ -10,9 +10,9 @@ local p0, p1 = socketpair(posix_socket.AF_UNIX, posix_socket.SOCK_STREAM, 0)
 local buf0, buf1 = imsg.new(p0), imsg.new(p1)
 
 buf0:allow_fdpass()
-buf0:set_maxsize(imsg.IMSG_HEADER_SIZE+imsg.MAX_IMSGSIZE)
+buf0:set_maxsize(imsg.MAX_IMSGSIZE)
 
-buf1:set_maxsize(imsg.IMSG_HEADER_SIZE+imsg.MAX_IMSGSIZE)
+buf1:set_maxsize(imsg.MAX_IMSGSIZE)
 
 local typ, id, payload = 42, 69, "hello, world!"
 
@@ -107,6 +107,17 @@ local keep = posix_unistd.dup(0)
 assert(not pcall(buf2.compose, buf2, typ, id, 0, keep, "x"))
 assert(posix_unistd.close(keep))
 assert(buf0:queuelen() == 0)
+
+-- the maximum counts data only: a full payload passes, one more byte does not
+buf0:compose(typ, id, 0, -1, string.rep('B', imsg.MAX_IMSGSIZE))
+assert(buf0:queuelen() == 1)
+buf0:flush()
+buf1:read()
+assert(buf1:get():len() == imsg.MAX_IMSGSIZE)
+assert(not pcall(buf0.compose, buf0, typ, id, 0, -1,
+    string.rep('B', imsg.MAX_IMSGSIZE + 1)))
+assert(buf0:queuelen() == 0)
+assert(not pcall(buf0.set_maxsize, buf0, -1))
 
 -- fileno reports the socket
 assert(buf0:fileno() == p0)
