@@ -106,6 +106,7 @@ assert(not pcall(buf0.compose, buf0, typ, id, 0, -2, "x"))
 local keep = posix_unistd.dup(0)
 assert(not pcall(buf2.compose, buf2, typ, id, 0, keep, "x"))
 assert(posix_unistd.close(keep))
+assert(not pcall(imsg.new, -1))
 assert(buf0:queuelen() == 0)
 
 -- the maximum counts data only: a full payload passes, one more byte does not

@@ -164,7 +164,8 @@ lua_imsg_type(lua_State *L)
 /***
 Forward this imsg to another imsgbuf.
 
-The imsg is queued for sending on the target imsgbuf.
+The imsg is queued for sending on the target imsgbuf. The file descriptor
+is never forwarded: it stays with this imsg, see @{fd}.
 @function forward
 @tparam imsgbuf imsgbuf imsgbuf to forward this imsg to
 @raise errno
@@ -291,6 +292,9 @@ Read pending data, and queue imsgs into imsgbuf.
 
 Individual imsgs can be retrieved with @{get}.
 @function read
+@treturn[1] boolean true, also when no data was ready
+@treturn[2] nil at end of file
+@raise errno
 */
 static int
 lua_imsgbuf_read(lua_State *L)
@@ -527,7 +531,7 @@ static int
 lua_imsgbuf_new(lua_State *L)
 {
 	struct limsgbuf *lim;
-	int fd = luaL_checkinteger(L, 1);
+	int fd = (int)checkrange(L, 1, 0, INT_MAX);
 
 	lim = lua_newuserdata(L, sizeof(*lim));
 	lim->fd = fd;
@@ -536,7 +540,7 @@ lua_imsgbuf_new(lua_State *L)
 	luaL_setmetatable(L, IMSGBUF_MT);
 
 	if(imsgbuf_init(&lim->buf, fd) < 0)
-		luaL_error(L, "imsgbuf_init");
+		luaL_error(L, "imsgbuf_init: %s", strerror(errno));
 	lim->closed = 0;
 
 	return 1;
