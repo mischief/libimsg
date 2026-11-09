@@ -3,6 +3,7 @@ option('lua', type : 'combo', choices : ['false', 'luajit', 'lua5.3', 'lua5.4', 
 option('lua-incdir', type : 'string', value : '', description : 'Lua header directory for -Dlua=rock')
 option('lua-module-directory', type : 'string', value : '', description : 'override lua C module directory')
 option('lua-only', type : 'boolean', value : false)
-option('lua-static', type : 'boolean', value : false)
+option('lua-static', type : 'boolean', value : false,
+  description : 'link libimsg into the module, and install archives of libimsg and the binding')
 
 option('docs', type: 'feature', value: 'auto', description: 'build API documentation with ldoc')

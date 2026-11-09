@@ -54,6 +54,16 @@ lua_libimsg = shared_library('imsg',
   override_options: which_lua == 'rock' ? ['b_lundef=false'] : [],
 )
 
+# With lua-static, an archive of the binding too, for programs that link Lua
+# and their modules into one binary.
+if is_static and which_lua != 'rock'
+  static_library('imsg_lua', 'imsg_lua.c',
+    include_directories: [imsg_incdir],
+    dependencies: [lua_dep, libimsg_dep],
+    install: true,
+  )
+endif
+
 # A rock build does not know the interpreter; luarocks test runs the tests.
 lua_bin = disabler()
 if which_lua != 'rock'
